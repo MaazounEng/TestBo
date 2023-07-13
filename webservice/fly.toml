@@ -1,7 +1,0 @@
-app = "My_first_bot"
-
-[build]
-  image = "flyio/github-actions:latest"
-
-[env]
-  GITHUB_TOKEN = "GITHUB_TOKEN"
