@@ -11,7 +11,7 @@ app = Flask(__name__)
 app_id = '361313'
 # Read the bot certificate
 with open(
-        os.path.normpath(os.path.expanduser('C:\Users\maazounc\certs\github\bot-in-action.2023-07-14.private-key.pem')),
+        os.path.normpath(os.path.expanduser('C:\Users\$USERNAME\certs\github\bot-in-action.2023-07-14.private-key.pem')),
         'r'
 ) as cert_file:
     app_key = cert_file.read()
