@@ -1,64 +1,46 @@
-
 import os
-import requests
+import aiohttp
 
-from flask import Flask, request
-from github import Github, GithubIntegration
+from aiohttp import web
 
+from gidgethub import routing, sansio
+from gidgethub import aiohttp as gh_aiohttp
 
-app = Flask(__name__)
-# MAKE SURE TO CHANGE TO YOUR APP NUMBER!!!!!
-app_id = '361313'
-# Read the bot certificate
-with open(
-        os.path.normpath(os.path.expandvars('C:\Users\maazounc\certs\github\Bot-in-action.2023-07-14.private-key.pem')),
-        'r'
-) as cert_file:
-    app_key = cert_file.read()
+routes = web.RouteTableDef()
 
-# Create an GitHub integration instance
-git_integration = GithubIntegration(
-    app_id,
-    app_key,
-)
+router = routing.Router()
 
+@router.register("issues", action="opened")
+async def issue_opened_event(event, gh, *args, **kwargs):
+    """
+    Whenever an issue is opened, greet the author and say thanks.
+    """
+    url = event.data["issue"]["comments_url"]
+    author = event.data["issue"]["user"]["login"]
 
-@app.route("/", methods=['POST'])
-def bot():
-    # Get the event payload
-    payload = request.json
+    message = f"Thanks for the report @{author}! I will look into it ASAP! (I'm a bot)."
+    await gh.post(url, data={"body": message})
 
-    # Check if the event is a GitHub PR creation event
-    if not all(k in payload.keys() for k in ['action', 'pull_request']) and \
-            payload['action'] == 'opened':
-        return "ok"
+@routes.post("/")
+async def main(request):
+    body = await request.read()
 
-    owner = payload['repository']['owner']['login']
-    repo_name = payload['repository']['name']
+    secret = os.environ.get("GH_SECRET")
+    oauth_token = os.environ.get("GH_AUTH")
 
-    # Get a git connection as our bot
-    # Here is where we are getting the permission to talk as our bot and not
-    # as a Python webservice
-    git_connection = Github(
-        login_or_token=git_integration.get_access_token(
-            git_integration.get_installation(owner, repo_name).id
-        ).token
-    )
-    repo = git_connection.get_repo(f"{owner}/{repo_name}")
-
-    issue = repo.get_issue(number=payload['pull_request']['number'])
-
-    # Call meme-api to get a random meme
-    response = requests.get(url='https://meme-api.herokuapp.com/gimme')
-    if response.status_code != 200:
-        return 'ok'
-
-    # Get the best resolution meme
-    meme_url = response.json()['preview'][-1]
-    # Create a comment with the random meme
-    issue.create_comment(f"![Alt Text]({meme_url})")
-    return "ok"
+    event = sansio.Event.from_http(request.headers, body, secret=secret)
+    async with aiohttp.ClientSession() as session:
+        gh = gh_aiohttp.GitHubAPI(session, "MaazounEng",
+                                  oauth_token=oauth_token)
+        await router.dispatch(event, gh)
+    return web.Response(status=200)
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=8081)
+    app = web.Application()
+    app.add_routes(routes)
+    port = os.environ.get("PORT")
+    if port is not None:
+        port = int(port)
+
+    web.run_app(app, port=port)
